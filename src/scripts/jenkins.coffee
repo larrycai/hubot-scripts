@@ -190,12 +190,6 @@ jenkinsList = (msg) ->
           catch error
             msg.send error
 
-<<<<<<< HEAD
-=======
-jenkinsHelp = (msg) ->
-  msg.send helpString
-
->>>>>>> d71ace4f5dd30587985b1ae49cb50ce573fd21d7
 check_build = (msg, robot, callback) ->
     console.log "timeout and queue size is:", queue.length
     if queue.length == 0
@@ -243,17 +237,11 @@ module.exports = (robot) ->
   robot.respond /j(?:enkins)? b (\d+)/i, (msg) ->
     jenkinsBuildById(msg)
 
-  robot.respond /j(?:enkins)? console (.*)/i, (msg) ->
-    jenkinsConsole(msg)
-
   robot.respond /j(?:enkins)? list( (.+))?/i, (msg) ->
     jenkinsList(msg)
 
   robot.respond /j(?:enkins)? describe (.*)/i, (msg) ->
     jenkinsDescribe(msg)
-
-  robot.respond /j(?:enkins)? help/i, (msg) ->
-    jenkinsHelp(msg)
 
   robot.jenkins = {
     list: jenkinsList,
