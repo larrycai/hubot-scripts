@@ -190,9 +190,12 @@ jenkinsList = (msg) ->
           catch error
             msg.send error
 
+<<<<<<< HEAD
+=======
 jenkinsHelp = (msg) ->
   msg.send helpString
 
+>>>>>>> d71ace4f5dd30587985b1ae49cb50ce573fd21d7
 check_build = (msg, robot, callback) ->
     console.log "timeout and queue size is:", queue.length
     if queue.length == 0
