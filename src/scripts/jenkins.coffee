@@ -7,6 +7,8 @@
 # Configuration:
 #   HUBOT_JENKINS_URL
 #   HUBOT_JENKINS_AUTH
+#   HUBOT_JENKINS_NOTIFY_BUILD
+#   HUBOT_JENKINS_NOTIFY_INTERVAL
 #
 #   Auth should be in the "user:password" format.
 #
@@ -27,6 +29,8 @@ querystring = require 'querystring'
 # instead of the job's name. Gets populated on when calling
 # list.
 jobList = []
+queue   = []
+init = false
 
 jenkinsBuildById = (msg) ->
   # Switch the index with the job name
@@ -38,7 +42,7 @@ jenkinsBuildById = (msg) ->
   else
     msg.reply "I couldn't find that job. Try `jenkins list` to get a list."
 
-jenkinsBuild = (msg, buildWithEmptyParameters) ->
+jenkinsBuild = (msg, robot,buildWithEmptyParameters) ->
     url = process.env.HUBOT_JENKINS_URL
     job = querystring.escape msg.match[1]
     params = msg.match[3]
@@ -57,11 +61,26 @@ jenkinsBuild = (msg, buildWithEmptyParameters) ->
           msg.reply "Jenkins says: #{err}"
         else if 200 <= res.statusCode < 400 # Or, not an error code.
           msg.reply "(#{res.statusCode}) Build started for #{job} #{url}/job/#{job}"
+          if process.env.HUBOT_JENKINS_NOTIFY_BUILD is "true"
+              item = 
+                user: msg.message.user,
+                name: job,
+                url: "#{url}/job/#{job}"
+
+              queue.push(item)
+              
+              if not init
+                init = true
+                # set interval is 10 seconds
+                interval = process.env.HUBOT_JENKINS_NOTIFY_INTERVAL || 10
+                setInterval check_build, interval*1000, msg, robot
+                msg.reply "timer is started .."
+              msg.reply "you will be notified when the job is finished .."
         else if 400 == res.statusCode
           jenkinsBuild(msg, true)
         else
           msg.reply "Jenkins says: Status #{res.statusCode} #{body}"
-
+              
 jenkinsDescribe = (msg) ->
     url = process.env.HUBOT_JENKINS_URL
     job = msg.match[1]
@@ -171,18 +190,67 @@ jenkinsList = (msg) ->
           catch error
             msg.send error
 
+jenkinsHelp = (msg) ->
+  msg.send helpString
+
+check_build = (msg, robot, callback) ->
+    console.log "timeout and queue size is:", queue.length
+    if queue.length == 0
+      return
+    # make it simple, do one item each timeout !!
+    # not javascript style
+    item = queue.shift()
+    get_build(msg, robot,item)
+
+get_build = (msg, robot, item) ->
+  url = process.env.HUBOT_JENKINS_URL
+  job = item.name
+  user = item.user
+  path = "#{url}/job/#{job}/lastBuild/api/json/"
+  req = msg.http(path)
+  if process.env.HUBOT_JENKINS_AUTH
+    auth = new Buffer(process.env.HUBOT_JENKINS_AUTH).toString('base64')
+    req.headers Authorization: "Basic #{auth}"
+
+  req.header('Content-Length', 0)
+  console.log "checking ..  #{path}"
+  req.get() (err, res, body) ->
+      if err
+        console.log "err #{err}"
+      else
+        response = ""
+        try
+          content = JSON.parse(body)
+          if content.building is false
+            robot.reply {user: user }, "#{job} .. building is finished, result #{content.result}"
+            robot.reply {user: user }, "url : #{item.url}/#{content.number}"
+          else
+            console.log "#{job} : building is in progress, will check again (debug info)"
+            robot.reply {user: user }, "#{job} building is in progress, [this log will be removed ..] "             
+            queue.push(item)
+        catch error
+          robot.reply {user: user }, " fetch data error, please check by yourself #{item.url}"          
+          console.log "fetch data error, really ? #{err} "
+          robot.reply {user: user }, " hubot will do better next time "
+
 module.exports = (robot) ->
   robot.respond /j(?:enkins)? build ([\w\.\-_ ]+)(, (.+))?/i, (msg) ->
-    jenkinsBuild(msg, false)
+    jenkinsBuild(msg, robot, false)
 
   robot.respond /j(?:enkins)? b (\d+)/i, (msg) ->
     jenkinsBuildById(msg)
+
+  robot.respond /j(?:enkins)? console (.*)/i, (msg) ->
+    jenkinsConsole(msg)
 
   robot.respond /j(?:enkins)? list( (.+))?/i, (msg) ->
     jenkinsList(msg)
 
   robot.respond /j(?:enkins)? describe (.*)/i, (msg) ->
     jenkinsDescribe(msg)
+
+  robot.respond /j(?:enkins)? help/i, (msg) ->
+    jenkinsHelp(msg)
 
   robot.jenkins = {
     list: jenkinsList,
